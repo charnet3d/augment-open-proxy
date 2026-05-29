@@ -21,6 +21,9 @@ const ORDERED_EFFORT_LEVELS = ["low", "medium", "high", "max", "xhigh"] as const
  *   Others  (e.g. code-review)            →  pass through, dots→dashes
  */
 export function expandShortName(shortName: string): string {
+  // Router/Special models: map known aliases to canonical IDs
+  if (shortName === "prism-a") return "butler_a";
+
   // Claude: haiku/sonnet/opus + numeric version + optional dash-suffix (e.g. -500k)
   const claudeMatch = shortName.match(/^(haiku|sonnet|opus)(\d[\d.]*)(-[a-z0-9]+)?$/i);
   if (claudeMatch) {
@@ -49,15 +52,26 @@ export const FALLBACK_MODEL_IDS: readonly string[] = [
   "claude-sonnet-4",
   "claude-sonnet-4-5",
   "claude-sonnet-4-6",
+  "claude-sonnet-4-6-500k",
   "claude-opus-4-5",
   "claude-opus-4-6",
+  "claude-opus-4-6-500k",
   "claude-opus-4-7",
+  "claude-opus-4-7-medium",
+  "claude-opus-4-7-high",
+  "claude-opus-4-7-xhigh",
+  "claude-opus-4-7-500k",
+  "claude-opus-4-8",
+  "claude-opus-4-8-medium",
+  "claude-opus-4-8-high",
+  "claude-opus-4-8-xhigh",
   "gemini-3-1-pro-preview",
   "gpt-5",
   "gpt-5-1",
   "gpt-5-2",
   "gpt-5-4",
   "code-review",
+  "butler_a",
 ];
 
 /**
@@ -244,6 +258,11 @@ export async function normalizeModelId(modelId: string): Promise<string> {
   if (!modelId) return modelId;
   const ids = await getModelIds();
   if (ids.includes(modelId)) return modelId;
+
+  // Try expanding if it's a short name (e.g. prism-a -> butler_a, haiku4.5 -> claude-haiku-4-5)
+  const expanded = expandShortName(modelId);
+  if (expanded !== modelId && ids.includes(expanded)) return expanded;
+
   const stripped = modelId.replace(ANTHROPIC_DATE_SUFFIX, "");
   if (stripped !== modelId && ids.includes(stripped)) return stripped;
   return modelId;

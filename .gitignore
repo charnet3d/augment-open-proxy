@@ -9,3 +9,4 @@ dist/
 .DS_Store
 Thumbs.db
 /log.txt
+/scripts/local

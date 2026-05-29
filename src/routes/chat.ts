@@ -123,7 +123,7 @@ router.post("/completions", async (c) => {
 
     // Allow any canonical model ID even if the registry is unavailable (e.g. no CLI).
     // Canonical names always start with a known provider prefix followed by a hyphen.
-    const MODEL_PATTERN = /^(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*$/;
+    const MODEL_PATTERN = /^(?:butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
     const modelAvailable = await isModelAvailable(canonicalModelId);
     if (!modelAvailable && !MODEL_PATTERN.test(canonicalModelId)) {
       return c.json(

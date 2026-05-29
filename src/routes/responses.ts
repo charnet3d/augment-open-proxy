@@ -48,8 +48,10 @@ router.use("*", async (c, next) => {
   return next();
 });
 
-// Canonical model IDs always start with a known provider prefix.
-const MODEL_PATTERN = /^(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*$/;
+// Canonical model IDs start with a known provider prefix followed by a hyphen.
+// The sole router model butler_a is matched exactly; no other butler variants
+// are accepted until a second router is confirmed.
+const MODEL_PATTERN = /^(?:butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
 
 function generateResponseId(): string {
   return `resp_${randomUUID().replace(/-/g, "")}`;
