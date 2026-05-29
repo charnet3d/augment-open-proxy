@@ -4,6 +4,7 @@ import {
   dataToBase64,
   hasAnyImage,
   buildChatRequestWithImages,
+  ensureNonEmptyMessage,
   patchModelForImages,
 } from "../services/augmentImagePatch";
 
@@ -334,6 +335,135 @@ describe("augmentImagePatch", () => {
       const model: any = { modelId: "m" };
       expect(() => patchModelForImages(model)).not.toThrow();
       expect(model.buildPayload).toBeUndefined();
+    });
+
+    it("fills empty SDK-built message with a placeholder when nodes carry content", () => {
+      // Simulates the Claude Code tool-result-only turn: SDK's buildPayload
+      // returns nodes with TOOL_RESULT but an empty `message`, which the
+      // backend would reject ("Current user message is empty or contains
+      // only whitespace").
+      const original = vi.fn().mockReturnValue({
+        message: "",
+        nodes: [
+          { id: 0, type: 1, tool_result_node: { tool_use_id: "c1", content: "42", is_error: false } },
+        ],
+      });
+      const model: any = { buildPayload: original, modelId: "m", sessionId: "s" };
+      patchModelForImages(model);
+      const result = model.buildPayload({
+        prompt: [
+          { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", output: { type: "text", value: "42" } }] },
+        ],
+      });
+      expect(result.message).toBe(".");
+      expect(result.nodes).toHaveLength(1);
+    });
+
+    it("leaves SDK-built message untouched when it is already non-empty", () => {
+      const original = vi.fn().mockReturnValue({ message: "hello", nodes: [] });
+      const model: any = { buildPayload: original, modelId: "m", sessionId: "s" };
+      patchModelForImages(model);
+      const result = model.buildPayload({ prompt: [{ role: "user", content: "hello" }] });
+      expect(result.message).toBe("hello");
+    });
+
+    it("does not inject placeholder when both message and nodes are empty (caller error)", () => {
+      const original = vi.fn().mockReturnValue({ message: "", nodes: [] });
+      const model: any = { buildPayload: original, modelId: "m", sessionId: "s" };
+      patchModelForImages(model);
+      const result = model.buildPayload({ prompt: [] });
+      expect(result.message).toBe("");
+    });
+  });
+
+  describe("ensureNonEmptyMessage", () => {
+    it("replaces whitespace-only message when nodes carry content", () => {
+      const out = ensureNonEmptyMessage({ message: "   \n", nodes: [{ id: 0, type: 1 }] });
+      expect(out.message).toBe(".");
+    });
+
+    it("is a no-op when payload is null or non-object", () => {
+      expect(ensureNonEmptyMessage(null)).toBeNull();
+      expect(ensureNonEmptyMessage(undefined)).toBeUndefined();
+    });
+
+    it("is a no-op when message is not a string", () => {
+      const payload: any = { nodes: [{ id: 0 }] };
+      ensureNonEmptyMessage(payload);
+      expect(payload.message).toBeUndefined();
+    });
+
+    it("sanitizes empty request_message entries in chat_history (snake_case)", () => {
+      const payload: any = {
+        message: "ok",
+        nodes: [{ id: 0 }],
+        chat_history: [
+          { request_message: "hello", request_nodes: [{ id: 0 }], response_text: "hi", response_nodes: [] },
+          { request_message: "", request_nodes: [{ id: 0, type: 1 }], response_text: "", response_nodes: [] },
+          { request_message: "   ", request_nodes: [], response_text: "", response_nodes: [] },
+        ],
+      };
+      ensureNonEmptyMessage(payload);
+      expect(payload.chat_history[0].request_message).toBe("hello");
+      expect(payload.chat_history[1].request_message).toBe(".");
+      // Whitespace-only with no nodes is left alone (truly empty turn).
+      expect(payload.chat_history[2].request_message).toBe("   ");
+    });
+
+    it("sanitizes empty request_message entries in chatHistory (camelCase)", () => {
+      const payload: any = {
+        message: "ok",
+        nodes: [{ id: 0 }],
+        chatHistory: [
+          { request_message: "", request_nodes: [{ id: 0, type: 1 }], response_text: "", response_nodes: [] },
+        ],
+      };
+      ensureNonEmptyMessage(payload);
+      expect(payload.chatHistory[0].request_message).toBe(".");
+    });
+  });
+
+  describe("buildChatRequestWithImages — empty message fallback", () => {
+    it("injects placeholder when trailing message is tool-result-only", () => {
+      const out = buildChatRequestWithImages(
+        [
+          { role: "user", content: [{ type: "text", text: "what is 6*7?" }] },
+          {
+            role: "assistant",
+            content: [
+              { type: "tool-call", toolCallId: "c1", toolName: "calc", input: { x: 42 } },
+            ],
+          },
+          {
+            role: "tool",
+            content: [{ type: "tool-result", toolCallId: "c1", output: { type: "text", value: "42" } }],
+          },
+        ],
+        undefined,
+      );
+      expect(out.message).toBe(".");
+      const trNode = out.nodes.find((n: any) => n.type === 1);
+      expect(trNode).toBeDefined();
+    });
+
+    it("injects placeholder for prior tool-result-only turns in chat_history", () => {
+      // Conversation: user(text) → assistant(tool_use) → tool(tool_result) →
+      // assistant(tool_use) → tool(tool_result). The middle history entry has
+      // an empty request_message because its user-side was tool-result-only.
+      const out = buildChatRequestWithImages(
+        [
+          { role: "user", content: [{ type: "text", text: "do X" }] },
+          { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "t", input: {} }] },
+          { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", output: { type: "text", value: "r1" } }] },
+          { role: "assistant", content: [{ type: "tool-call", toolCallId: "c2", toolName: "t", input: {} }] },
+          { role: "tool", content: [{ type: "tool-result", toolCallId: "c2", output: { type: "text", value: "r2" } }] },
+        ],
+        undefined,
+      );
+      expect(out.chatHistory).toHaveLength(2);
+      expect(out.chatHistory[0].request_message).toBe("do X");
+      expect(out.chatHistory[1].request_message).toBe(".");
+      expect(out.message).toBe(".");
     });
   });
 });

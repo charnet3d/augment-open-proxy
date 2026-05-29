@@ -4,6 +4,7 @@ import {
   type AugmentCredentials,
 } from "@augmentcode/auggie-sdk";
 import { patchModelForImages } from "./augmentImagePatch";
+import { patchModelForSignatures } from "./augmentSignaturePatch";
 
 // User-Agent that identifies as the Augment CLI. Some models (like Prism) are
 // gated behind this UA.
@@ -73,6 +74,12 @@ export async function getAugmentModel(modelId: string): Promise<AugmentLanguageM
   // AI SDK v5 file parts. The SDK drops images by default. Falls back to the
   // SDK's original buildPayload for prompts without images.
   patchModelForImages(model);
+
+  // Flatten tool-call history for router models (butler_a / prism-a) that
+  // route to Vertex AI Gemini thinking backends. Augment strips thought
+  // signatures server-side, so we convert all structured tool turns to plain
+  // text to avoid signature-validation errors on replayed history.
+  patchModelForSignatures(model);
 
   return model;
 }

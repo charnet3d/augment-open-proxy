@@ -189,7 +189,7 @@ export function buildChatRequestWithImages(
     } else if (msg.role === "assistant") {
       const { nodes: responseNodes, text: responseText } = assistantMessageToResponseNodes(msg);
       chatHistory.push({
-        request_message: pendingRequestText,
+        request_message: ensureNonEmptyMessageText(pendingRequestText, pendingRequestNodes),
         request_nodes: pendingRequestNodes,
         response_text: responseText,
         response_nodes: responseNodes,
@@ -201,7 +201,7 @@ export function buildChatRequestWithImages(
   }
   pendingRequestNodes.forEach((node, i) => { node.id = i; });
   return {
-    message: pendingRequestText,
+    message: ensureNonEmptyMessageText(pendingRequestText, pendingRequestNodes),
     nodes: pendingRequestNodes,
     chatHistory,
     toolDefinitions: toolsToDefinitions(tools),
@@ -209,21 +209,71 @@ export function buildChatRequestWithImages(
 }
 
 /**
+ * The Augment backend rejects requests whose current-turn `message` field is
+ * empty or whitespace-only ("invalid argument: Current user message is empty
+ * or contains only whitespace"). This happens whenever a client turn consists
+ * solely of `tool_result` blocks (the standard agent loop after the model
+ * called tools): the SDK builds structured `nodes` from the tool results but
+ * leaves the corresponding `message` empty because that field only sources
+ * from user/system text. The same empty-message bug also affects
+ * `chat_history[].request_message` for prior tool-only turns, which the
+ * backend validates identically. Inject a minimal non-whitespace placeholder
+ * in both places so the backend accepts the request — the actual tool-result
+ * payload still travels through the structured nodes, so the model sees the
+ * real content. Only injected when the corresponding nodes carry content;
+ * truly empty turns are left alone to surface the original error.
+ */
+const EMPTY_MESSAGE_PLACEHOLDER = ".";
+
+function ensureNonEmptyMessageText(message: string, nodes: unknown[]): string {
+  if (message.trim().length > 0) return message;
+  if (!Array.isArray(nodes) || nodes.length === 0) return message;
+  return EMPTY_MESSAGE_PLACEHOLDER;
+}
+
+export function ensureNonEmptyMessage<T>(payload: T): T {
+  if (!payload || typeof payload !== "object") return payload;
+  const p = payload as any;
+  if (typeof p.message === "string") {
+    p.message = ensureNonEmptyMessageText(p.message, p.nodes);
+  }
+  // chat_history is the SDK's snake_case field; chatHistory is the
+  // camelCase intermediate form returned by buildChatRequestWithImages.
+  // Sanitize whichever is present so both call sites are covered.
+  const history = p.chat_history ?? p.chatHistory;
+  if (Array.isArray(history)) {
+    for (const entry of history) {
+      if (entry && typeof entry === "object" && typeof entry.request_message === "string") {
+        entry.request_message = ensureNonEmptyMessageText(
+          entry.request_message,
+          entry.request_nodes,
+        );
+      }
+    }
+  }
+  return payload;
+}
+
+/**
  * Wraps the model's `buildPayload` so that image-bearing prompts produce a
  * payload with Augment IMAGE nodes. Non-image prompts fall through to the
- * SDK's original implementation untouched. Also flips `supportsImageUrls`
- * to `true` so the AI SDK doesn't pre-strip image parts.
+ * SDK's original implementation. The wrapper also runs `ensureNonEmptyMessage`
+ * on every result so the SDK's tool-result-only turn (empty `message`, nodes
+ * carry the content) doesn't trip the backend's whitespace check. Also flips
+ * `supportsImageUrls` to `true` so the AI SDK doesn't pre-strip image parts.
  */
 export function patchModelForImages(model: any): void {
   if (!model || typeof model.buildPayload !== "function") return;
   const original = model.buildPayload.bind(model);
   model.buildPayload = (options: any) => {
-    if (!hasAnyImage(options?.prompt)) return original(options);
+    if (!hasAnyImage(options?.prompt)) {
+      return ensureNonEmptyMessage(original(options));
+    }
     const { message, nodes, chatHistory, toolDefinitions } = buildChatRequestWithImages(
       options.prompt,
       options.tools,
     );
-    return {
+    return ensureNonEmptyMessage({
       mode: "CLI_AGENT",
       model: model.modelId,
       message,
@@ -231,7 +281,7 @@ export function patchModelForImages(model: any): void {
       chat_history: chatHistory,
       conversation_id: model.sessionId,
       tool_definitions: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-    };
+    });
   };
   model.supportsImageUrls = true;
 }

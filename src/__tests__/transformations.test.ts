@@ -1008,6 +1008,52 @@ describe("transformAnthropicMessages", () => {
     const out = transformAnthropicMessages([{ role: "user", content: [] }]);
     expect(out).toEqual([{ role: "user", content: "" }]);
   });
+
+  it("handles mid-conversation system role as a system message (not assistant)", () => {
+    // Claude Code injects a skills-list message with role:"system" mid-conversation.
+    // Previously the else branch mis-classified it as assistant, flushing pending
+    // nodes into chat_history and leaving message="" on the outbound payload.
+    const out = transformAnthropicMessages(
+      [
+        { role: "user", content: "hello" },
+        { role: "assistant", content: "hi there" },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { role: "system" as any, content: "updated skills list" },
+        { role: "user", content: "what can you do?" },
+      ],
+    );
+    // There should be no assistant message whose content equals the system text
+    const badAssistant = out.find(
+      (m) => m.role === "assistant" && m.content === "updated skills list",
+    );
+    expect(badAssistant).toBeUndefined();
+    // There should be a system message with the injected text
+    const sysMsg = out.find(
+      (m) => m.role === "system" && m.content === "updated skills list",
+    );
+    expect(sysMsg).toBeDefined();
+    // The final message must be the user turn (not empty)
+    const last = out[out.length - 1];
+    expect(last.role).toBe("user");
+    expect(last.content).toEqual([{ type: "text", text: "what can you do?" }]);
+  });
+
+  it("drops a mid-conversation system message that has no text content", () => {
+    const out = transformAnthropicMessages(
+      [
+        { role: "user", content: "hi" },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { role: "system" as any, content: "" },
+        { role: "user", content: "again" },
+      ],
+    );
+    const sysMsgs = out.filter((m) => m.role === "system");
+    // Only 0 system messages (no top-level system was passed)
+    expect(sysMsgs).toHaveLength(0);
+    // Final user turn is intact
+    const last = out[out.length - 1];
+    expect(last.role).toBe("user");
+  });
 });
 
 describe("transformAnthropicTools", () => {

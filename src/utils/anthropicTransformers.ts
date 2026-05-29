@@ -98,7 +98,17 @@ export function transformAnthropicMessages(
         ? [{ type: "text", text: msg.content }]
         : msg.content;
 
-    if (msg.role === "user") {
+    if (msg.role === "system") {
+      // Mid-conversation system messages (e.g. Claude Code's skills-list
+      // injection) must NOT be misclassified as assistant — that turns them
+      // into a synthetic assistant turn that flushes pending nodes into
+      // chat_history and leaves the outbound current `message` empty.
+      const text = blocks
+        .filter((b): b is AnthropicTextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("");
+      if (text) out.push({ role: "system", content: text });
+    } else if (msg.role === "user") {
       const toolResults: AiToolResultPart[] = [];
       const userParts: Array<AiTextPart | AiImagePart> = [];
       for (const b of blocks) {

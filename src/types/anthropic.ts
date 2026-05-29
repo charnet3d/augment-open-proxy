@@ -48,7 +48,11 @@ export type AnthropicContentBlock =
 
 // ── Messages ──────────────────────────────────────────────────────────────
 export interface AnthropicMessage {
-  role: "user" | "assistant";
+  // Anthropic's public spec only documents user/assistant, but Claude Code
+  // and similar clients sometimes inject a mid-conversation system message
+  // (e.g. an updated skills list). Accept it here and let the transformer
+  // route it to the AI SDK system role.
+  role: "user" | "assistant" | "system";
   content: string | AnthropicContentBlock[];
 }
 
