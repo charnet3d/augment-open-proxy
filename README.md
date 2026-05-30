@@ -4,18 +4,79 @@ OpenAI- and Anthropic-compatible HTTP proxy that routes requests through the Aug
 
 ## Prerequisites
 
-- **Node.js** 22 or later
-- **Augment account** — authenticate via CLI:
+- **Augment account** — authenticate via the official CLI:
   ```bash
   auggie login
   ```
-  This stores your OAuth session in `~/.augment/session.json`, which the SDK picks up automatically.
+  This stores your OAuth session in `~/.augment/session.json`, which the proxy picks up automatically. Alternatively, set `AUGMENT_API_TOKEN` + `AUGMENT_API_URL` (see [Configuration](#configuration)).
+
+  > Don't have `auggie` installed? `npm install -g @augmentcode/auggie` — or, if you're using the Docker image below, the CLI is already inside and you can `docker exec` it. See [Token-based auth without auggie](#token-based-auth-without-auggie) at the bottom of this README.
 
 ## Installation
 
+Pick the option that fits your setup. All four accept the same configuration (see [Configuration](#configuration)).
+
+### Option 1 — npm / npx (no install, runs anywhere with Node ≥ 20)
+
 ```bash
-npm install
+# One-off run
+npx augment-open-proxy
+
+# Or install globally
+npm install -g augment-open-proxy
+augment-open-proxy
 ```
+
+`npx` always fetches the latest published version. Pin a specific version with `npx augment-open-proxy@1.0.1` if you want reproducibility.
+
+### Option 2 — Docker image (no Node required)
+
+Pre-built multi-arch images (linux/amd64, linux/arm64) are published to **GitHub Container Registry** on every release.
+
+```bash
+# Session-based auth — mount your auggie login session
+docker run -d \
+  --name augment-open-proxy \
+  -p 7888:7888 \
+  -e AOP_HOST=0.0.0.0 \
+  -v "$HOME/.augment:/root/.augment:ro" \
+  ghcr.io/charnet3d/augment-open-proxy:latest
+```
+
+Pin a version with `ghcr.io/charnet3d/augment-open-proxy:1.0.1`. Tags: `latest`, full semver (`1.0.1`), and major.minor (`1.0`).
+
+### Option 3 — Standalone binary (no Node, no Docker)
+
+Self-contained executables for **linux-x64**, **linux-arm64**, **darwin-arm64**, and **win-x64** are attached to every [GitHub Release](https://github.com/charnet3d/augment-open-proxy/releases).
+
+```bash
+# Linux/macOS — download, extract, run
+curl -L https://github.com/charnet3d/augment-open-proxy/releases/latest/download/augment-open-proxy-linux-x64.tar.gz | tar -xz
+./augment-open-proxy-linux-x64
+```
+
+```powershell
+# Windows
+Invoke-WebRequest -Uri https://github.com/charnet3d/augment-open-proxy/releases/latest/download/augment-open-proxy-win-x64.zip -OutFile aop.zip
+Expand-Archive aop.zip
+.\aop\augment-open-proxy-win-x64.exe
+```
+
+Binaries are built with [Node SEA](https://nodejs.org/api/single-executable-applications.html) — Node and the proxy are baked into one ~100 MB file. No `node_modules`, no PATH setup.
+
+### Option 4 — From source (contributors / unreleased changes)
+
+```bash
+git clone https://github.com/charnet3d/augment-open-proxy.git
+cd augment-open-proxy
+npm install
+npm start          # runs src/index.ts via tsx
+# or
+npm run build      # bundle to dist/
+node dist/index.js
+```
+
+Requires Node 22+. See [Development](#development) for the full contributor workflow.
 
 ## Configuration
 
@@ -43,90 +104,51 @@ AUGMENT_API_URL=
 
 ## Usage
 
-### Start the proxy
+Once the proxy is running (via any of the four options above) it serves on `http://localhost:7888` by default.
+
+### Token-based auth without auggie
+
+Skip `auggie login` entirely by exporting your tenant credentials before starting the proxy. This is the standard mode for CI, containers in CI, and any headless box:
 
 ```bash
-npm run start
-# or
-npx tsx src/index.ts
+export AUGMENT_API_TOKEN=<token>
+export AUGMENT_API_URL=<url>
+npx augment-open-proxy            # or docker run -e AUGMENT_API_TOKEN ... ghcr.io/...
 ```
 
-The server starts on `http://localhost:7888` by default.
-
-### Run with Docker
-
-A `Dockerfile` is included for users who prefer to build and manage the image
-directly with the Docker CLI.
+For Docker, pass them as `-e` flags:
 
 ```bash
-# Build the image
-docker build -t augment-open-proxy .
-```
-
-**Session-based auth** (recommended — uses `auggie login`):
-
-```bash
-# 1. Authenticate on the host once
-auggie login
-
-# 2. Run the container (your ~/.augment session is mounted read-only)
-docker run -d \
-  --name augment-open-proxy \
-  -p 7888:7888 \
-  -e AOP_HOST=0.0.0.0 \
-  -v "$HOME/.augment:/root/.augment:ro" \
-  augment-open-proxy
-```
-
-**Token-based auth** (CI / headless environments):
-
-```bash
-docker run -d \
-  --name augment-open-proxy \
-  -p 7888:7888 \
+docker run -d -p 7888:7888 \
   -e AOP_HOST=0.0.0.0 \
   -e AUGMENT_API_TOKEN=<token> \
   -e AUGMENT_API_URL=<url> \
-  augment-open-proxy
+  ghcr.io/charnet3d/augment-open-proxy:latest
 ```
 
-Override the port by changing both sides of `-p` and passing `-e AOP_PORT=<n>`.
+### Docker Compose (build from source)
+
+If you cloned the repo (Option 4), a `docker-compose.yml` is included for one-command builds:
+
+```bash
+auggie login            # session-based auth
+docker compose up -d --build
+```
+
+Or token-based:
+
+```bash
+AUGMENT_API_TOKEN=<token> AUGMENT_API_URL=<url> docker compose up -d --build
+```
+
+Override the port with `AOP_PORT=<n> docker compose up`. Tail logs with `docker compose logs -f`, stop with `docker compose down`.
+
+### Container management
 
 ```bash
 docker logs -f augment-open-proxy   # tail logs
 docker stop augment-open-proxy      # stop
 docker rm augment-open-proxy        # remove container
-```
-
-### Run with Docker Compose
-
-A `docker-compose.yml` is included. It builds the image from the local
-`Dockerfile` and starts the proxy with a single command.
-
-**Session-based auth** (recommended — uses `auggie login`):
-
-```bash
-# 1. Authenticate on the host once
-auggie login
-
-# 2. Build and start the proxy (only session.json is mounted read-only)
-docker compose up --build
-```
-
-**Token-based auth** (CI / headless environments):
-
-```bash
-AUGMENT_API_TOKEN=<token> AUGMENT_API_URL=<url> docker compose up --build
-```
-
-The proxy is available at `http://localhost:7888` once the health-check passes.
-Override the port with `AOP_PORT=<n> docker compose up`.
-
-To run in the background:
-```bash
-docker compose up -d --build
-docker compose logs -f   # tail logs
-docker compose down      # stop
 ```
 
 ### curl examples
@@ -225,11 +247,29 @@ that the proxy does not.
 |---|---|
 | `401 Unauthorized` or auth errors | Run `auggie login` and re-authenticate, or set `AUGMENT_API_TOKEN` and `AUGMENT_API_URL` in `.env`. |
 | `model not found` | Check the model name — use `claude-sonnet-4-5`, `claude-haiku-4-5`, `claude-opus-4-1`, etc. See your Augment dashboard for available models. |
-| Proxy won't start | Verify `AOP_PORT` is not already in use: `netstat -ano \| findstr :7888` |
+| Proxy won't start | Verify `AOP_PORT` is not already in use: `lsof -i :7888` (Linux/macOS) or `netstat -ano \| findstr :7888` (Windows). |
 | Streaming hangs | Ensure `stream: true` is set in the request body and the client supports SSE. |
 | SDK connection errors | Check your network connection and that `~/.augment/session.json` exists and is not expired. Run `auggie login` to refresh. |
 
 ## Development
+
+### Build
+
+| Command | Output |
+|---|---|
+| `npm run build` | Bundles `src/` to `dist/index.js` via esbuild. Used by the published npm package and by the Docker image. |
+| `npm run build:sea -- <target>` | Builds a Node SEA binary for the current host. `target` must match the host arch (`linux-x64`, `linux-arm64`, `darwin-arm64`, `win-x64`). SEA does not cross-compile. |
+| `npm run typecheck` | Strict TypeScript check without emitting files (the runtime builds skip type-checking for speed). |
+
+### Releasing
+
+Releases are fully automated by [`.github/workflows/release.yml`](.github/workflows/release.yml). To cut a new version:
+
+1. Bump the version: `npm version <major|minor|patch> --no-git-tag-version`
+2. Commit the change.
+3. Push a matching tag: `git tag v$(node -p "require('./package.json').version") && git push origin --tags`
+
+The workflow validates the tag, runs tests, then publishes binaries to GitHub Releases, the Docker image to `ghcr.io`, and the npm package via OIDC trusted publishing. A manual `workflow_dispatch` trigger is also available in the Actions tab for re-runs.
 
 ### Tests
 
