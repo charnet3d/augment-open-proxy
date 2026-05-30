@@ -134,12 +134,16 @@ jobs:
     environment: npm-publish
     steps:
       - uses: actions/checkout@v6
-      # Node 22.14+ ships npm 11.5.1+ which auto-detects OIDC trusted publishing.
       - uses: actions/setup-node@v6
         with:
-          node-version: '22.14'
+          node-version: '22'
           cache: npm
           registry-url: 'https://registry.npmjs.org'
+      # OIDC trusted publishing requires npm >= 11.5.1. Node 22 LTS still
+      # ships npm 10.x, so we upgrade npm explicitly here. Doing this AFTER
+      # `npm ci` would invalidate the lockfile resolution; doing it BEFORE
+      # means the install also runs on the newer npm.
+      - run: npm install -g npm@latest
       - run: npm ci
       - name: Build
         run: npm run build
