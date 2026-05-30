@@ -2,6 +2,7 @@ import { jsonSchema } from "ai";
 import type {
   AnthropicMessage,
   AnthropicContentBlock,
+  AnthropicTextBlock,
   AnthropicSystem,
   AnthropicTool,
   AnthropicToolChoice,
