@@ -1,8 +1,28 @@
+# Keep the build context small — these are either rebuilt inside the image
+# or have no business inside it.
 node_modules
 dist
+build
+coverage
+.git
+.gitignore
+.github
+.vscode
+.idea
+*.log
+log.txt
 .env
 .env.*
 !.env.example
-*.log
-.git
-.gitignore
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+# Test files: not needed in the runtime image (CI runs them separately).
+src/__tests__
+vitest.config.ts
+vitest.e2e.config.ts
+# Editor/IDE noise.
+*.swp
+*.swo
+# Workflow scratch.
+scripts/local

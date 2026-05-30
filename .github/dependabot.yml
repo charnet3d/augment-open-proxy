@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # Keep GitHub Actions up to date.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker-actions:
+        patterns:
+          - "docker/*"
+      actions:
+        patterns:
+          - "actions/*"
+
+  # Keep npm dependencies up to date.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Wait before proposing newly-published versions. Supply-chain attacks on
+    # npm (typosquats, account takeovers, malicious post-install scripts)
+    # are most often caught within days of publication. Letting versions
+    # "soak" before we ingest them shifts the risk from "first adopter" to
+    # the broader ecosystem.
+    cooldown:
+      default-days: 7
+      semver-patch-days: 3   # patch: usually safe bug-fixes, short wait
+      semver-minor-days: 7   # minor: new features, moderate wait
+      semver-major-days: 14  # major: breaking changes + highest blast radius
+    ignore:
+      # typescript minor/patch bumps can be disruptive — review manually.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
