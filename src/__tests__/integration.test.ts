@@ -574,10 +574,10 @@ describe("integration — full request flow", () => {
       // First chunk must establish the assistant role
       expect(chunks[0].choices[0].delta).toMatchObject({ role: "assistant" });
 
-      // Reconstruct the full text from content deltas (skip the role chunk)
+      // Reconstruct the full text from content deltas (skip the role chunk and any non-content chunks)
       const reconstructed = chunks
         .slice(1)
-        .map((c: any) => c.choices[0].delta.content ?? "")
+        .map((c: any) => c.choices[0]?.delta?.content ?? "")
         .join("");
 
       expect(reconstructed).toBe("The answer is 42.");
