@@ -358,6 +358,29 @@ router.post("/completions", async (c) => {
             choices: [{ index: 0, delta: {}, finish_reason: lastFinishReason }],
           };
           controller.enqueue(textEncoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`));
+
+          // Terminal usage chunk. The OpenAI streaming-usage convention is a
+          // trailing chunk with an empty `choices` array and a `usage` object.
+          // Emit it unconditionally (zeros when upstream reported nothing) so
+          // OpenAI-compatible clients (Opencode, OpenWebUI, …) always receive
+          // a usage frame and their token counters populate instead of staying
+          // at 0. Augment does not guarantee exact counts.
+          const usageInputTokens = logUsage?.promptTokens ?? logUsage?.inputTokens ?? 0;
+          const usageOutputTokens = logUsage?.completionTokens ?? logUsage?.outputTokens ?? 0;
+          const usageChunk: ChatCompletionChunk = {
+            id: requestId,
+            object: "chat.completion.chunk",
+            created: timestamp,
+            model: modelId,
+            choices: [],
+            usage: {
+              prompt_tokens: usageInputTokens,
+              completion_tokens: usageOutputTokens,
+              total_tokens: logUsage?.totalTokens ?? (usageInputTokens + usageOutputTokens),
+            },
+          };
+          controller.enqueue(textEncoder.encode(`data: ${JSON.stringify(usageChunk)}\n\n`));
+
           controller.enqueue(textEncoder.encode("data: [DONE]\n\n"));
 
           // Emit the structured log line now — the response status is 200 by

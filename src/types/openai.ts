@@ -159,6 +159,13 @@ export interface ChatCompletionChunk {
   model: string;
   choices: ChatCompletionChunkChoice[];
   system_fingerprint?: string;
+  /**
+   * Token usage. Only emitted on the terminal chunk of a stream (alongside
+   * an empty `choices` array, per the OpenAI streaming-usage convention) so
+   * OpenAI-compatible clients (Opencode, OpenWebUI, …) can populate their
+   * token counters. Augment does not guarantee exact counts.
+   */
+  usage?: ChatCompletionUsage;
 }
 
 export interface ModelObject {
