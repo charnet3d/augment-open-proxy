@@ -1,6 +1,6 @@
 {
   "name": "augment-open-proxy",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "HTTP proxy that lets OpenAI- and Anthropic-compatible clients (Claude Code, Cursor, Continue) talk to the Augment backend via the Augment SDK.",
   "main": "dist/index.js",
   "bin": {
