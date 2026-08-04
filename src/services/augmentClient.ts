@@ -21,11 +21,16 @@ async function getCachedCredentials(): Promise<AugmentCredentials> {
   return cachedCredentials;
 }
 
-// Router models (currently only butler_a / prism-a) are gated by the CLI
-// user-agent and require CLI_NONINTERACTIVE mode. Kept as an exact-match list
-// for now to minimize blast radius; broaden when more routers are confirmed.
+// Router models are gated by the CLI user-agent and require CLI_NONINTERACTIVE
+// mode. The CLI/registry advertises the router under its user-facing name
+// ("prism-a"); the Augment backend only accepts requests naming the internal
+// model ID ("butler_a"). Kept as an exact-match pair for now to minimize
+// blast radius; broaden when more routers are confirmed.
+const ROUTER_PUBLIC_MODEL_ID = "prism-a";
+const ROUTER_INTERNAL_MODEL_ID = "butler_a";
+
 function isRouterModel(modelId: string): boolean {
-  return modelId === "butler_a";
+  return modelId === ROUTER_PUBLIC_MODEL_ID || modelId === ROUTER_INTERNAL_MODEL_ID;
 }
 
 // Sonnet 5 (base + effort/size suffixes, e.g. "claude-sonnet-5-high",
@@ -39,12 +44,15 @@ function isSonnet5Model(modelId: string): boolean {
 export async function getAugmentModel(modelId: string): Promise<AugmentLanguageModel> {
   const creds = await getCachedCredentials();
   const router = isRouterModel(modelId);
+  // Translate the user-facing router name to the internal ID the backend
+  // actually expects. All other model IDs pass through unchanged.
+  const backendModelId = modelId === ROUTER_PUBLIC_MODEL_ID ? ROUTER_INTERNAL_MODEL_ID : modelId;
 
   // Model IDs arriving here are already in canonical form (e.g. "claude-haiku-4-5",
   // "gpt-5-4", "gemini-3-1-pro-preview") because expandShortName() is applied at
   // registry load time. The SDK uses CLI_AGENT mode by default, which the backend
   // accepts for canonical names with both session and API-key auth.
-  const model = new AugmentLanguageModel(modelId, {
+  const model = new AugmentLanguageModel(backendModelId, {
     apiKey: creds.apiKey,
     apiUrl: creds.apiUrl,
     debug: process.env.DEBUG === "true",

@@ -49,9 +49,10 @@ router.use("*", async (c, next) => {
 });
 
 // Canonical model IDs start with a known provider prefix followed by a hyphen.
-// The sole router model butler_a is matched exactly; no other butler variants
-// are accepted until a second router is confirmed.
-const MODEL_PATTERN = /^(?:butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
+// The sole router model is matched exactly under its user-facing name
+// (prism-a, internally translated to butler_a); no other router variants are
+// accepted until a second router is confirmed.
+const MODEL_PATTERN = /^(?:prism-a|butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
 
 function generateResponseId(): string {
   return `resp_${randomUUID().replace(/-/g, "")}`;

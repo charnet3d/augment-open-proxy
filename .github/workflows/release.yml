@@ -153,21 +153,25 @@ jobs:
         run: npm publish --provenance --access public
 
   # ───────────────────────────────────────────────────────────────────────
-  # publish-docker: build multi-arch (amd64 + arm64) image and push to
-  # GitHub Container Registry. Uses the built-in GITHUB_TOKEN — no extra
-  # secret needed. The first push creates a package linked to this repo
-  # via the org.opencontainers.image.source label.
+  # build-docker: build each architecture on a native runner and push an
+  # architecture-suffixed image. QEMU emulation is unreliable for the Node
+  # install workload in this image.
   # ───────────────────────────────────────────────────────────────────────
-  publish-docker:
-    name: publish to ghcr.io
+  build-docker:
+    name: build Docker (${{ matrix.arch }})
     needs: [validate, test]
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest,    platform: linux/amd64, arch: amd64 }
+          - { runner: ubuntu-22.04-arm, platform: linux/arm64, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
     env:
       IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v6
 
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
         with:
           driver-opts: |
@@ -190,17 +194,63 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.tag }}
             type=semver,pattern={{major}},value=${{ needs.validate.outputs.tag }}
             type=raw,value=latest
+          flavor: |
+            suffix=-${{ matrix.arch }}
+            onlatest=true
 
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+  # Assemble architecture images into the canonical multi-arch tags.
+  # ───────────────────────────────────────────────────────────────────────
+  publish-docker:
+    name: publish to ghcr.io
+    needs: [validate, build-docker]
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.validate.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.validate.outputs.tag }}
+            type=raw,value=latest
+
+      - name: Create multi-arch tags
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] || continue
+            docker buildx imagetools create \
+              --tag "$tag" \
+              "$tag-amd64" \
+              "$tag-arm64"
+          done <<< "$TAGS"
 
   # ───────────────────────────────────────────────────────────────────────
   # create-release: gathers binaries from build-binaries and attaches them

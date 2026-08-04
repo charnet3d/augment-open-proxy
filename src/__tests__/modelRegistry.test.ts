@@ -541,6 +541,13 @@ describe("expandShortName", () => {
     ["gpt5.1",    "gpt-5-1"],
     ["gpt5.2",    "gpt-5-2"],
     ["gpt5.4",    "gpt-5-4"],
+    // GPT models — named suffix variants
+    ["gpt5.4-mini",  "gpt-5-4-mini"],
+    ["gpt5.6-luna",  "gpt-5-6-luna"],
+    ["gpt5.6-sol",   "gpt-5-6-sol"],
+    ["gpt5.6-terra", "gpt-5-6-terra"],
+    // Grok models
+    ["grok4.5", "grok-4-5"],
     // Gemini — dots become dashes, prefix unchanged
     ["gemini-3.1-pro-preview", "gemini-3-1-pro-preview"],
     // Pass-through (already canonical, no dots)

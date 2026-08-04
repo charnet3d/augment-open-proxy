@@ -52,8 +52,9 @@ function generateId(): string {
 
 // Anthropic accepts canonical IDs that start with `claude-`. We also accept
 // any registry-known ID so callers can target gpt/gemini variants through the
-// /v1/messages surface if they want to.
-const MODEL_PATTERN = /^(?:butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
+// /v1/messages surface if they want to. prism-a is the user-facing router
+// model (internally translated to butler_a).
+const MODEL_PATTERN = /^(?:prism-a|butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
 
 async function validateModel(modelId: string): Promise<string | undefined> {
   if (!modelId) return "Missing required field: model";

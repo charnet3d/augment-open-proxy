@@ -16,14 +16,14 @@ const ORDERED_EFFORT_LEVELS = ["low", "medium", "high", "max", "xhigh"] as const
  *   Claude  haiku/sonnet/opus + version + optional suffix
  *                                         →  claude-{family}-{version, dots→dashes}{-suffix}
  *                                            e.g. opus4.6-500k → claude-opus-4-6-500k
- *   GPT     gpt{version}                  →  gpt-{version, dots→dashes}
+ *   GPT     gpt{version} + optional suffix →  gpt-{version, dots→dashes}{-suffix}
+ *                                            e.g. gpt5.6-sol → gpt-5-6-sol
+ *   Grok    grok{version} + optional suffix →  grok-{version, dots→dashes}{-suffix}
+ *                                            e.g. grok4.5 → grok-4-5
  *   Gemini  gemini-{X.Y}-{rest}           →  gemini-{X-Y}-{rest}  (dots→dashes)
  *   Others  (e.g. code-review)            →  pass through, dots→dashes
  */
 export function expandShortName(shortName: string): string {
-  // Router/Special models: map known aliases to canonical IDs
-  if (shortName === "prism-a") return "butler_a";
-
   // Claude: haiku/sonnet/opus + numeric version + optional dash-suffix (e.g. -500k)
   const claudeMatch = shortName.match(/^(haiku|sonnet|opus)(\d[\d.]*)(-[a-z0-9]+)?$/i);
   if (claudeMatch) {
@@ -33,10 +33,13 @@ export function expandShortName(shortName: string): string {
     return `claude-${family}-${version}${suffix}`;
   }
 
-  // GPT: gpt{version} → gpt-{version}
-  const gptMatch = shortName.match(/^gpt(\d[\d.]*)$/i);
-  if (gptMatch) {
-    return `gpt-${gptMatch[1].replace(/\./g, "-")}`;
+  // GPT/Grok: {family}{version} + optional dash-suffix (e.g. -mini, -sol, -luna, -terra)
+  const gptGrokMatch = shortName.match(/^(gpt|grok)(\d[\d.]*)(-[a-z0-9]+)?$/i);
+  if (gptGrokMatch) {
+    const family = gptGrokMatch[1].toLowerCase();
+    const version = gptGrokMatch[2].replace(/\./g, "-");
+    const suffix = gptGrokMatch[3] ?? "";
+    return `${family}-${version}${suffix}`;
   }
 
   // All others (gemini-X.Y-..., code-review, …): replace dots with dashes
@@ -46,13 +49,30 @@ export function expandShortName(shortName: string): string {
 /**
  * Fallback model list — used when `auggie models list --json` fails or returns
  * bad output. These are already in canonical (expanded) form.
+ *
+ * Mirrors a live `GET /v1/models` snapshot (effort-level variants included)
+ * with the model IDs from the `.env.example` `AOP_DISABLE_EFFORT_MODELS`
+ * sample already excluded, since the fallback path can't apply that filter
+ * itself (it skips `fetchModelEntries`'s per-entry disable logic). Re-sync
+ * periodically as Augment adds/retires models or effort tiers.
  */
 export const FALLBACK_MODEL_IDS: readonly string[] = [
   "claude-haiku-4-5",
-  "claude-sonnet-4",
   "claude-sonnet-4-5",
   "claude-sonnet-4-6",
   "claude-sonnet-4-6-500k",
+  "claude-sonnet-5-high",
+  "claude-sonnet-5-high-low",
+  "claude-sonnet-5-high-medium",
+  "claude-sonnet-5-high-high",
+  "claude-sonnet-5-high-xhigh",
+  "claude-sonnet-5-high-max",
+  "claude-sonnet-5-500k",
+  "claude-sonnet-5-500k-low",
+  "claude-sonnet-5-500k-medium",
+  "claude-sonnet-5-500k-high",
+  "claude-sonnet-5-500k-xhigh",
+  "claude-sonnet-5-500k-max",
   "claude-opus-4-5",
   "claude-opus-4-6",
   "claude-opus-4-6-500k",
@@ -65,13 +85,23 @@ export const FALLBACK_MODEL_IDS: readonly string[] = [
   "claude-opus-4-8-medium",
   "claude-opus-4-8-high",
   "claude-opus-4-8-xhigh",
+  "claude-opus-5",
+  "claude-opus-5-medium",
+  "claude-opus-5-high",
+  "claude-opus-5-xhigh",
   "gemini-3-1-pro-preview",
   "gpt-5",
   "gpt-5-1",
   "gpt-5-2",
   "gpt-5-4",
+  "gpt-5-4-mini",
+  "gpt-5-5",
+  "gpt-5-6-luna",
+  "gpt-5-6-sol",
+  "gpt-5-6-terra",
+  "grok-4-5",
   "code-review",
-  "butler_a",
+  "prism-a",
 ];
 
 /**
