@@ -210,18 +210,25 @@ model ID is left untouched.
 
 Some models advertise effort levels in the CLI but currently 404 on the
 backend when the suffixed ID is sent (observed for `claude-opus-4-6` —
-likely an entitlement/rollout gap). Suppress them with
-`AOP_DISABLE_EFFORT_MODELS`:
+likely an entitlement/rollout gap). Suppress all effort variants for a base
+model, or only selected variants, with `AOP_DISABLE_EFFORT_MODELS`:
 
 ```env
 AOP_DISABLE_EFFORT_MODELS=claude-opus-4-6
 # or, equivalently, using CLI short names:
 AOP_DISABLE_EFFORT_MODELS=opus4.6,sonnet4.6
+# disable only selected levels; the base model and other levels remain usable:
+AOP_DISABLE_EFFORT_MODELS=claude-opus-4-7-low,opus4.7-xhigh
 ```
 
-Listed models still appear in `/v1/models` under their base ID, but their
-suffixed variants are hidden and `reasoning_effort` against them is a
-no-op (the request is sent as-is to the base model).
+Entries are comma- or whitespace-separated. Bare base IDs disable all
+advertised levels; IDs with an effort suffix (`low`, `medium`, `high`, `max`,
+or `xhigh`) disable only that level. In both cases, the base model remains
+available.
+
+Listed models still appear in `/v1/models` under their base ID. Disabled
+suffixed variants are hidden, and `reasoning_effort` requests that resolve to
+those variants are a no-op (the request is sent as-is to the base model).
 
 ## Image input (experimental)
 

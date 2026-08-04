@@ -437,6 +437,34 @@ describe("AOP_DISABLE_EFFORT_MODELS env override", () => {
     expect(ids.filter((i) => i.startsWith("claude-opus-4-7-"))).toEqual([]);
   });
 
+  it("disables only explicitly listed effort levels", async () => {
+    process.env.AOP_DISABLE_EFFORT_MODELS =
+      "claude-opus-4-7-low claude-opus-4-7-xhigh";
+    const { resolveEffortModelId, listModels } = await import("../services/modelRegistry");
+
+    expect(await resolveEffortModelId("claude-opus-4-7", "low")).toBeUndefined();
+    expect(await resolveEffortModelId("claude-opus-4-7", "high")).toBe(
+      "claude-opus-4-7-high"
+    );
+    expect(await resolveEffortModelId("claude-opus-4-7", "xhigh")).toBeUndefined();
+
+    const ids = (await listModels()).data.map((m) => m.id);
+    expect(ids).toContain("claude-opus-4-7");
+    expect(ids).not.toContain("claude-opus-4-7-low");
+    expect(ids).toContain("claude-opus-4-7-medium");
+    expect(ids).toContain("claude-opus-4-7-high");
+    expect(ids).not.toContain("claude-opus-4-7-xhigh");
+  });
+
+  it("supports short names for specific effort levels", async () => {
+    process.env.AOP_DISABLE_EFFORT_MODELS = "opus4.7-low";
+    const { resolveEffortModelId } = await import("../services/modelRegistry");
+    expect(await resolveEffortModelId("claude-opus-4-7", "low")).toBeUndefined();
+    expect(await resolveEffortModelId("claude-opus-4-7", "high")).toBe(
+      "claude-opus-4-7-high"
+    );
+  });
+
   it("is a no-op when the env var is unset or empty", async () => {
     delete process.env.AOP_DISABLE_EFFORT_MODELS;
     const { resolveEffortModelId } = await import("../services/modelRegistry");

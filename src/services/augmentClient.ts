@@ -28,6 +28,14 @@ function isRouterModel(modelId: string): boolean {
   return modelId === "butler_a";
 }
 
+// Sonnet 5 (base + effort/size suffixes, e.g. "claude-sonnet-5-high",
+// "claude-sonnet-5-500k") returns HTTP 500 under the SDK's default CLI_AGENT
+// mode but works under CHAT mode, confirmed by direct SDK probing. Matches
+// only the "-5" family so "claude-sonnet-4*" etc. are untouched.
+function isSonnet5Model(modelId: string): boolean {
+  return /^claude-sonnet-5(-|$)/.test(modelId);
+}
+
 export async function getAugmentModel(modelId: string): Promise<AugmentLanguageModel> {
   const creds = await getCachedCredentials();
   const router = isRouterModel(modelId);
@@ -44,36 +52,32 @@ export async function getAugmentModel(modelId: string): Promise<AugmentLanguageM
     clientUserAgent: router ? CLI_USER_AGENT : "augment-open-proxy/1.0.0",
   });
 
-  // CHAT mode is required for two independent reasons:
-  //  1. API-key auth: the backend rejects CLI_AGENT mode with direct API keys.
-  //  2. Short model IDs: the registry exposes short names (e.g. "haiku4.5") that
-  //     the backend only accepts in CHAT mode; long names (e.g. "claude-haiku-4-5")
-  //     work with either mode.
-  // CHAT mode is accepted for all auth types and model ID formats, so we always
-  // use it. generateText/streamText call buildPayload internally, so the patch
-  // applies regardless of which high-level AI SDK function is used.
-  // const originalBuildPayload = (model as any).buildPayload.bind(model);
-  // (model as any).buildPayload = (options: unknown) => {
-  //   const payload = originalBuildPayload(options);
-  //   return { ...payload, mode: "CHAT" };
-  // };
-
-  // Router models need CLI_NONINTERACTIVE; the SDK defaults to CLI_AGENT, which
-  // the backend rejects with 404 for these. Guarded so the mocked SDK in tests
-  // (which has no buildPayload) is not affected.
+  // Some models require a non-default `mode` on the request payload:
+  //  - Router models (butler_a / prism-a) need CLI_NONINTERACTIVE; the SDK's
+  //    default CLI_AGENT is rejected with 404 for these.
+  //  - Sonnet 5 needs CHAT; CLI_AGENT returns HTTP 500 for this family.
+  // Guarded so the mocked SDK in tests (which has no buildPayload) is not
+  // affected. At most one of these applies per model.
+  const forcedMode = router
+    ? "CLI_NONINTERACTIVE"
+    : isSonnet5Model(modelId)
+      ? "CHAT"
+      : undefined;
   const original = (model as any).buildPayload;
-  if (router && typeof original === "function") {
+  if (forcedMode && typeof original === "function") {
     const bound = original.bind(model);
     (model as any).buildPayload = (options: unknown) => ({
       ...bound(options),
-      mode: "CLI_NONINTERACTIVE",
+      mode: forcedMode,
     });
   }
 
   // Experimental: enable image input by injecting Augment IMAGE nodes for
   // AI SDK v5 file parts. The SDK drops images by default. Falls back to the
-  // SDK's original buildPayload for prompts without images.
-  patchModelForImages(model);
+  // SDK's original buildPayload for prompts without images. The image-path
+  // payload is built from scratch (not via the wrapped buildPayload above),
+  // so it needs the same forced mode passed through explicitly.
+  patchModelForImages(model, forcedMode ?? "CLI_AGENT");
 
   // Flatten tool-call history for router models (butler_a / prism-a) that
   // route to Vertex AI Gemini thinking backends. Augment strips thought

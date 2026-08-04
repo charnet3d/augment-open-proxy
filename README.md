@@ -95,7 +95,7 @@ AUGMENT_API_URL=
 | `AOP_HOST` | No | Bind address (default: `localhost`) |
 | `AUGMENT_API_TOKEN` | No | API token for authentication. Falls back to `auggie login` session if omitted. |
 | `AUGMENT_API_URL` | No | Tenant-specific API URL. Required when `AUGMENT_API_TOKEN` is set. |
-| `AOP_DISABLE_EFFORT_MODELS` | No | Comma- or whitespace-separated list of base model IDs (or CLI short names) whose effort variants should be hidden from `/v1/models` and not used for `reasoning_effort` rewriting. See [Reasoning effort](API.md#reasoning-effort). |
+| `AOP_DISABLE_EFFORT_MODELS` | No | Comma- or whitespace-separated base IDs or suffixed IDs (for example, `claude-opus-4-7-low`). A base disables all effort variants; a suffixed ID disables only that level. See [Reasoning effort](API.md#reasoning-effort). |
 | `AOP_LOGGING` | No | Per-request logging verbosity. `none` (silent), `info` (one line per request: method, path, status, durationMs, model, requestId, usage — default), or `body` (`info` plus full request and assembled response payloads). See [Structured logging](API.md#structured-logging). |
 | `AOP_LOG_FORMAT` | No | Output shape for log records: `text` (human-readable single line, default) or `json` (single-line JSON per record). See [Structured logging](API.md#structured-logging). |
 | `AOP_HEADERS_TIMEOUT_MS` | No | Milliseconds to wait for the first response byte from the upstream (default: `1800000` = 30 min). Node's default 5-minute limit trips long thinking calls; this raises it. Set to `0` to disable. |

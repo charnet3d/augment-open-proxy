@@ -188,7 +188,9 @@ describeE2E("e2e — real Augment API", () => {
                 .filter((l): l is string => typeof l === "string" && l.length > 0)
                 .map((l) => l.toLowerCase())
             : [];
-          const effortLevels = disabled.has(baseId) ? [] : advertised;
+          const effortLevels = advertised.filter(
+            (level) => !disabled.has(baseId) && !disabled.has(`${baseId}-${level}`)
+          );
           return expandModelEntry({ baseId, effortLevels });
         })
         .sort((a, b) => a.localeCompare(b));

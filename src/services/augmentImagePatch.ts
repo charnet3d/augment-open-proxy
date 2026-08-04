@@ -261,8 +261,14 @@ export function ensureNonEmptyMessage<T>(payload: T): T {
  * on every result so the SDK's tool-result-only turn (empty `message`, nodes
  * carry the content) doesn't trip the backend's whitespace check. Also flips
  * `supportsImageUrls` to `true` so the AI SDK doesn't pre-strip image parts.
+ *
+ * @param mode - request `mode` to set on the image-aware payload. Defaults to
+ *   `CLI_AGENT` (the SDK default) so existing callers are unaffected; models
+ *   that need a different mode (e.g. Sonnet 5 needs CHAT) must pass it in
+ *   explicitly since this payload is built from scratch, not via the caller's
+ *   own `buildPayload` wrapper.
  */
-export function patchModelForImages(model: any): void {
+export function patchModelForImages(model: any, mode: string = "CLI_AGENT"): void {
   if (!model || typeof model.buildPayload !== "function") return;
   const original = model.buildPayload.bind(model);
   model.buildPayload = (options: any) => {
@@ -274,7 +280,7 @@ export function patchModelForImages(model: any): void {
       options.tools,
     );
     return ensureNonEmptyMessage({
-      mode: "CLI_AGENT",
+      mode,
       model: model.modelId,
       message,
       nodes,

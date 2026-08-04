@@ -127,14 +127,13 @@ export function expandModelEntry(entry: ModelEntry): string[] {
 }
 
 /**
- * Parse `AOP_DISABLE_EFFORT_MODELS` into a Set of canonical base IDs whose
- * advertised effort levels should be ignored. Use this for models the CLI
- * advertises levels for but the backend currently rejects suffixed IDs on
- * (observed for `claude-opus-4-6`, likely an entitlement/rollout gap).
+ * Parse `AOP_DISABLE_EFFORT_MODELS` into normalized model IDs.
  *
- * Accepts either short names (`opus4.6`) or canonical IDs
- * (`claude-opus-4-6`); both are normalised through `expandShortName`. Comma-
- * or whitespace-separated, case-sensitive after normalisation.
+ * A bare base ID disables all advertised effort levels for that model, while
+ * a suffixed ID (e.g. `claude-opus-4-7-low`) disables only that level. Accepts
+ * either short names (`opus4.6`, `opus4.7-low`) or canonical IDs; both are
+ * normalized through `expandShortName`. Entries are comma- or whitespace-
+ * separated and case-sensitive after normalization.
  */
 export function getEffortDisabledBaseIds(): Set<string> {
   const raw = process.env.AOP_DISABLE_EFFORT_MODELS;
@@ -166,10 +165,15 @@ async function fetchModelEntries(): Promise<{ entries: ModelEntry[]; isFallback:
               .filter((l): l is string => typeof l === "string" && l.length > 0)
               .map((l) => l.toLowerCase())
           : [];
-        const effortLevels = disabled.has(baseId) ? [] : advertised;
-        if (disabled.has(baseId) && advertised.length > 0) {
+        const disabledLevels = disabled.has(baseId)
+          ? advertised
+          : advertised.filter((level) => disabled.has(`${baseId}-${level}`));
+        const effortLevels = advertised.filter(
+          (level) => !disabled.has(baseId) && !disabled.has(`${baseId}-${level}`)
+        );
+        if (disabledLevels.length > 0) {
           console.debug(
-            `[modelRegistry] effort levels disabled for ${baseId} via AOP_DISABLE_EFFORT_MODELS (advertised: ${advertised.join(", ")})`
+            `[modelRegistry] effort levels disabled for ${baseId} via AOP_DISABLE_EFFORT_MODELS (disabled: ${disabledLevels.join(", ")})`
           );
         }
         entries.push({ baseId, effortLevels });
@@ -289,11 +293,16 @@ export async function resolveEffortModelId(
   effort: ReasoningEffort
 ): Promise<string | undefined> {
   if (effort === "none") return undefined;
+  const requested = effort === "minimal" ? "low" : effort;
+  const disabled = getEffortDisabledBaseIds();
+  if (disabled.has(modelId) || disabled.has(`${modelId}-${requested}`)) {
+    return undefined;
+  }
+
   const entries = await getModelEntries();
   const entry = entries.find((e) => e.baseId === modelId);
   if (!entry || entry.effortLevels.length === 0) return undefined;
 
-  const requested = effort === "minimal" ? "low" : effort;
   if (entry.effortLevels.includes(requested)) {
     return `${entry.baseId}-${requested}`;
   }

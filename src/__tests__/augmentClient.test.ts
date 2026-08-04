@@ -8,11 +8,16 @@ const constructorCalls: Array<[string, object]> = [];
 
 // Use a class-based mock so it works with `new AugmentLanguageModel(...)`
 class MockAugmentLanguageModel {
+  modelId: string;
   constructor(modelId: string, options: object) {
     constructorCalls.push([modelId, options]);
+    this.modelId = modelId;
   }
   doGenerate = vi.fn();
   doStream = vi.fn();
+  // Minimal stand-in for the SDK's buildPayload, needed to exercise
+  // getAugmentModel()'s forced-mode wrapping (router / Sonnet 5 overrides).
+  buildPayload = vi.fn((options: unknown) => ({ mode: "CLI_AGENT", options }));
 }
 
 vi.mock("@augmentcode/auggie-sdk", () => ({
@@ -151,6 +156,44 @@ describe("augmentClient", () => {
       expect(constructorCalls[0][1]).toMatchObject({ debug: true });
 
       delete process.env.DEBUG;
+    });
+
+    describe("mode override", () => {
+      beforeEach(() => {
+        mockResolveCredentials.mockResolvedValue({
+          apiKey: "test-key",
+          apiUrl: "https://api.test.com",
+        });
+      });
+
+      it("forces CLI_NONINTERACTIVE for router model butler_a", async () => {
+        const model = (await getAugmentModel("butler_a")) as any;
+        const payload = model.buildPayload({ prompt: [] });
+        expect(payload.mode).toBe("CLI_NONINTERACTIVE");
+      });
+
+      it("forces CHAT for claude-sonnet-5 base and suffixed variants", async () => {
+        for (const id of ["claude-sonnet-5", "claude-sonnet-5-high", "claude-sonnet-5-500k"]) {
+          vi.resetModules();
+          constructorCalls.length = 0;
+          const { getAugmentModel: fresh } = await import("../services/augmentClient");
+          const model = (await fresh(id)) as any;
+          const payload = model.buildPayload({ prompt: [] });
+          expect(payload.mode).toBe("CHAT");
+        }
+      });
+
+      it("leaves the SDK default mode untouched for other models", async () => {
+        const model = (await getAugmentModel("claude-sonnet-4-5")) as any;
+        const payload = model.buildPayload({ prompt: [] });
+        expect(payload.mode).toBe("CLI_AGENT");
+      });
+
+      it("does not treat claude-sonnet-4x models as Sonnet 5", async () => {
+        const model = (await getAugmentModel("claude-sonnet-4-6-500k")) as any;
+        const payload = model.buildPayload({ prompt: [] });
+        expect(payload.mode).toBe("CLI_AGENT");
+      });
     });
   });
 });

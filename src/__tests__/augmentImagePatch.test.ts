@@ -331,6 +331,22 @@ describe("augmentImagePatch", () => {
       });
     });
 
+    it("uses the provided mode for image-aware payloads instead of the CLI_AGENT default", () => {
+      const original = vi.fn();
+      const model: any = { buildPayload: original, modelId: "claude-sonnet-5-high", sessionId: "sess" };
+      patchModelForImages(model, "CHAT");
+      const payload = model.buildPayload({
+        prompt: [
+          {
+            role: "user",
+            content: [{ type: "file", data: "Zm9v", mediaType: "image/png" }],
+          },
+        ],
+      });
+      expect(original).not.toHaveBeenCalled();
+      expect(payload).toMatchObject({ mode: "CHAT", model: "claude-sonnet-5-high" });
+    });
+
     it("is a no-op when the model has no buildPayload (defensive)", () => {
       const model: any = { modelId: "m" };
       expect(() => patchModelForImages(model)).not.toThrow();
