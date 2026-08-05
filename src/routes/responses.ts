@@ -51,8 +51,10 @@ router.use("*", async (c, next) => {
 // Canonical model IDs start with a known provider prefix followed by a hyphen.
 // The sole router model is matched exactly under its user-facing name
 // (prism-a, internally translated to butler_a); no other router variants are
-// accepted until a second router is confirmed.
-const MODEL_PATTERN = /^(?:prism-a|butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
+// accepted until a second router is confirmed. prism-custom is a non-router
+// alias (internally translated to prism_tenant_custom).
+const MODEL_PATTERN =
+  /^(?:prism-a|butler_a|prism-custom|prism_tenant_custom|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
 
 function generateResponseId(): string {
   return `resp_${randomUUID().replace(/-/g, "")}`;

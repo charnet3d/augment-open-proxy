@@ -21,16 +21,26 @@ async function getCachedCredentials(): Promise<AugmentCredentials> {
   return cachedCredentials;
 }
 
-// Router models are gated by the CLI user-agent and require CLI_NONINTERACTIVE
-// mode. The CLI/registry advertises the router under its user-facing name
-// ("prism-a"); the Augment backend only accepts requests naming the internal
-// model ID ("butler_a"). Kept as an exact-match pair for now to minimize
-// blast radius; broaden when more routers are confirmed.
-const ROUTER_PUBLIC_MODEL_ID = "prism-a";
-const ROUTER_INTERNAL_MODEL_ID = "butler_a";
+// Public-facing model IDs that map to a different internal ID for the SDK
+// call. Both entries are router models on the backend, but only "prism-a"
+// needs the extra CLI gating handled by needsCliGating() below:
+//  - "prism-a" -> "butler_a": gated behind the CLI user-agent and
+//    CLI_NONINTERACTIVE mode.
+//  - "prism-custom" -> "prism_tenant_custom": no gating needed, confirmed
+//    by direct probing that the internal ID works unconditionally under the
+//    SDK's default UA and CLI_AGENT mode. The raw public name 403s instead.
+const PUBLIC_TO_INTERNAL_MODEL_ID: Record<string, string> = {
+  "prism-a": "butler_a",
+  "prism-custom": "prism_tenant_custom",
+};
 
-function isRouterModel(modelId: string): boolean {
-  return modelId === ROUTER_PUBLIC_MODEL_ID || modelId === ROUTER_INTERNAL_MODEL_ID;
+// Internal model ID that is unreachable without the CLI user-agent and
+// CLI_NONINTERACTIVE mode. Kept as a single exact match for now to minimize
+// blast radius; broaden if more CLI-gated models are confirmed.
+const CLI_GATED_INTERNAL_MODEL_ID = "butler_a";
+
+function needsCliGating(backendModelId: string): boolean {
+  return backendModelId === CLI_GATED_INTERNAL_MODEL_ID;
 }
 
 // Sonnet 5 (base + effort/size suffixes, e.g. "claude-sonnet-5-high",
@@ -43,10 +53,10 @@ function isSonnet5Model(modelId: string): boolean {
 
 export async function getAugmentModel(modelId: string): Promise<AugmentLanguageModel> {
   const creds = await getCachedCredentials();
-  const router = isRouterModel(modelId);
-  // Translate the user-facing router name to the internal ID the backend
-  // actually expects. All other model IDs pass through unchanged.
-  const backendModelId = modelId === ROUTER_PUBLIC_MODEL_ID ? ROUTER_INTERNAL_MODEL_ID : modelId;
+  // Translate a user-facing name to the internal ID the backend actually
+  // expects. All other model IDs pass through unchanged.
+  const backendModelId = PUBLIC_TO_INTERNAL_MODEL_ID[modelId] ?? modelId;
+  const cliGated = needsCliGating(backendModelId);
 
   // Model IDs arriving here are already in canonical form (e.g. "claude-haiku-4-5",
   // "gpt-5-4", "gemini-3-1-pro-preview") because expandShortName() is applied at
@@ -56,17 +66,17 @@ export async function getAugmentModel(modelId: string): Promise<AugmentLanguageM
     apiKey: creds.apiKey,
     apiUrl: creds.apiUrl,
     debug: process.env.DEBUG === "true",
-    // Router models are only visible to requests carrying the CLI user-agent.
-    clientUserAgent: router ? CLI_USER_AGENT : "augment-open-proxy/1.0.0",
+    // CLI-gated models are only visible to requests carrying the CLI user-agent.
+    clientUserAgent: cliGated ? CLI_USER_AGENT : "augment-open-proxy/1.0.0",
   });
 
   // Some models require a non-default `mode` on the request payload:
-  //  - Router models (butler_a / prism-a) need CLI_NONINTERACTIVE; the SDK's
+  //  - CLI-gated models (butler_a) need CLI_NONINTERACTIVE; the SDK's
   //    default CLI_AGENT is rejected with 404 for these.
   //  - Sonnet 5 needs CHAT; CLI_AGENT returns HTTP 500 for this family.
   // Guarded so the mocked SDK in tests (which has no buildPayload) is not
   // affected. At most one of these applies per model.
-  const forcedMode = router
+  const forcedMode = cliGated
     ? "CLI_NONINTERACTIVE"
     : isSonnet5Model(modelId)
       ? "CHAT"
@@ -87,10 +97,10 @@ export async function getAugmentModel(modelId: string): Promise<AugmentLanguageM
   // so it needs the same forced mode passed through explicitly.
   patchModelForImages(model, forcedMode ?? "CLI_AGENT");
 
-  // Flatten tool-call history for router models (butler_a / prism-a) that
-  // route to Vertex AI Gemini thinking backends. Augment strips thought
-  // signatures server-side, so we convert all structured tool turns to plain
-  // text to avoid signature-validation errors on replayed history.
+  // Flatten tool-call history for CLI-gated models (butler_a) that route to
+  // Vertex AI Gemini thinking backends. Augment strips thought signatures
+  // server-side, so we convert all structured tool turns to plain text to
+  // avoid signature-validation errors on replayed history.
   patchModelForSignatures(model);
 
   return model;

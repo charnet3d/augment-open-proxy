@@ -1,5 +1,5 @@
 /**
- * Signature-error recovery for Augment router models (butler_a / prism-a).
+ * Signature-error recovery for the Augment CLI-gated router model (butler_a).
  *
  * Vertex AI Gemini "thinking" variants require a `thought_signature` on every
  * replayed function_call in history. Augment strips signatures server-side, so
@@ -214,12 +214,14 @@ function wrapStreamWithRetry(
 /**
  * Wraps `model.buildPayload`, `model.doGenerate`, and `model.doStream` to
  * implement try-structured / retry-with-Gemini-flatten on signature errors.
- * Gated to known router model IDs (butler_a / prism-a); composes with the
- * image patch by extending whatever methods are already bound on the model.
+ * Gated to the CLI-gated router's internal model ID (butler_a) — the only
+ * public name reaching this point is already translated to it by
+ * getAugmentModel(). Composes with the image patch by extending whatever
+ * methods are already bound on the model.
  */
 export function patchModelForSignatures(model: any): void {
   if (!model) return;
-  if (model.modelId !== "butler_a" && model.modelId !== "prism-a") return;
+  if (model.modelId !== "butler_a") return;
   if (typeof model.buildPayload !== "function") return;
 
   const origBuildPayload = model.buildPayload.bind(model);

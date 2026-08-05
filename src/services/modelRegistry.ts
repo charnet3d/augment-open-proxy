@@ -102,6 +102,7 @@ export const FALLBACK_MODEL_IDS: readonly string[] = [
   "grok-4-5",
   "code-review",
   "prism-a",
+  "prism-custom",
 ];
 
 /**

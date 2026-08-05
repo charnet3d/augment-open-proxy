@@ -172,6 +172,16 @@ describe("augmentClient", () => {
         expect(payload.mode).toBe("CLI_NONINTERACTIVE");
       });
 
+      it("translates prism-a to butler_a with CLI UA/mode gating", async () => {
+        const model = (await getAugmentModel("prism-a")) as any;
+        expect(model.modelId).toBe("butler_a");
+        expect(constructorCalls[0][1]).toMatchObject({
+          clientUserAgent: "augment.cli/0.28.0 (commit 63537d73)/noninteractive",
+        });
+        const payload = model.buildPayload({ prompt: [] });
+        expect(payload.mode).toBe("CLI_NONINTERACTIVE");
+      });
+
       it("forces CHAT for claude-sonnet-5 base and suffixed variants", async () => {
         for (const id of ["claude-sonnet-5", "claude-sonnet-5-high", "claude-sonnet-5-500k"]) {
           vi.resetModules();
@@ -185,6 +195,16 @@ describe("augmentClient", () => {
 
       it("leaves the SDK default mode untouched for other models", async () => {
         const model = (await getAugmentModel("claude-sonnet-4-5")) as any;
+        const payload = model.buildPayload({ prompt: [] });
+        expect(payload.mode).toBe("CLI_AGENT");
+      });
+
+      it("translates prism-custom to prism_tenant_custom without router UA/mode gating", async () => {
+        const model = (await getAugmentModel("prism-custom")) as any;
+        expect(model.modelId).toBe("prism_tenant_custom");
+        expect(constructorCalls[0][1]).toMatchObject({
+          clientUserAgent: "augment-open-proxy/1.0.0",
+        });
         const payload = model.buildPayload({ prompt: [] });
         expect(payload.mode).toBe("CLI_AGENT");
       });

@@ -124,7 +124,9 @@ router.post("/completions", async (c) => {
     // Allow any canonical model ID even if the registry is unavailable (e.g. no CLI).
     // Canonical names always start with a known provider prefix followed by a hyphen.
     // prism-a is the user-facing router model (internally translated to butler_a).
-    const MODEL_PATTERN = /^(?:prism-a|butler_a|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
+    // prism-custom is a non-router alias (internally translated to prism_tenant_custom).
+    const MODEL_PATTERN =
+      /^(?:prism-a|butler_a|prism-custom|prism_tenant_custom|(claude|gpt|gemini|code)-[a-z0-9][a-z0-9-]*)$/;
     const modelAvailable = await isModelAvailable(canonicalModelId);
     if (!modelAvailable && !MODEL_PATTERN.test(canonicalModelId)) {
       return c.json(
