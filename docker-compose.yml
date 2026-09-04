@@ -12,7 +12,7 @@ services:
       AOP_HOST: "0.0.0.0"
       AUGMENT_API_TOKEN: ${AUGMENT_API_TOKEN:-}
       AUGMENT_API_URL: ${AUGMENT_API_URL:-}
-      AOP_DISABLE_EFFORT_MODELS: ${AOP_DISABLE_EFFORT_MODELS:-claude-opus-4-6,claude-opus-4-6-500k,claude-sonnet-4-6-500k,claude-opus-4-7-500k}
+      AOP_DISABLE_EFFORT_MODELS: ${AOP_DISABLE_EFFORT_MODELS:-claude-opus-4-5,claude-opus-4-6,claude-opus-4-6-500k,claude-opus-4-7-low,claude-opus-4-7-max,claude-opus-4-7-500k,claude-opus-4-8-low,claude-opus-4-8-max,claude-opus-5-low,claude-opus-5-max,claude-sonnet-4-6,claude-sonnet-4-6-500k,gpt-5-6-luna,gpt-5-6-sol,gpt-5-6-terra}
       AOP_LOGGING: ${AOP_LOGGING:-info}
       AOP_LOG_FORMAT: ${AOP_LOG_FORMAT:-text}
     restart: unless-stopped
