@@ -13,7 +13,19 @@ async function importLogger(level: string | undefined, format?: string) {
   process.env.AOP_LOGGING = level ?? "";
   process.env.AOP_LOG_LEVEL = level ?? "";
   process.env.AOP_LOG_FORMAT = format ?? "";
-  return await import("../services/logger");
+
+  // Suppress dotenv's console output during module import
+  // (SDK 0.2.0 or its dependencies may emit diagnostics during initialization)
+  const originalLog = console.log;
+  const originalError = console.error;
+  try {
+    console.log = () => undefined;
+    console.error = () => undefined;
+    return await import("../services/logger");
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
 }
 
 function lastJsonLine(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown> | null {
