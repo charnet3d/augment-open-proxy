@@ -2,6 +2,8 @@
 
 OpenAI- and Anthropic-compatible HTTP proxy that routes requests through the Augment SDK. Use any OpenAI- or Anthropic-compatible client (Claude Code, Cursor, Continue, etc.) with Augment LLMs.
 
+> **⚠️ Maintenance notice**: The project creator no longer has an active Augment subscription and can no longer test, maintain, or guarantee quality for future versions of this proxy against the Augment SDK. The project is not abandoned — if you have Augment access and want to help maintain it, reach out for maintainer/contributor access, or feel free to fork the project and continue development independently.
+
 ## Prerequisites
 
 - **Augment account** — authenticate via the official CLI:
@@ -101,6 +103,20 @@ AUGMENT_API_URL=
 | `AOP_HEADERS_TIMEOUT_MS` | No | Milliseconds to wait for the first response byte from the upstream (default: `1800000` = 30 min). Node's default 5-minute limit trips long thinking calls; this raises it. Set to `0` to disable. |
 | `AOP_BODY_TIMEOUT_MS` | No | Milliseconds allowed between consecutive body chunks from the upstream (default: `1800000` = 30 min). Set to `0` to disable. |
 | `AOP_CONNECT_TIMEOUT_MS` | No | Milliseconds for the TCP connect handshake to the upstream (default: `30000` = 30 s). Set to `0` to disable. |
+| `AOP_API_KEY` | No | Require this key on every request (except the `/` health check). See [Securing the proxy](#securing-the-proxy). |
+| `AOP_ALLOWED_ORIGINS` | No | Comma-separated whitelist of origins allowed to make cross-origin browser requests. Default: any origin. See [Securing the proxy](#securing-the-proxy). |
+
+## Securing the proxy
+
+By default the proxy is open to anyone who can reach it on the network, with no request-origin restrictions. Two optional settings lock this down:
+
+- **API key** — set `AOP_API_KEY` to require it on every request (except the `/` health check, so uptime monitors and the Docker healthcheck keep working). Clients send it as `Authorization: Bearer <key>` or `X-API-Key: <key>`. Requests with a missing or incorrect key get a `401`.
+- **Origin whitelist** — set `AOP_ALLOWED_ORIGINS` to a comma-separated list of origins (e.g. `https://my-app.example.com,https://other.example.com`) allowed to make cross-origin browser requests. Requests from any other origin are denied the CORS headers (browsers block the response) and logged with a `[security] Blocked cross-origin request from disallowed domain: ...` warning on the console so you can see what's being blocked. Leave it unset to allow any origin, as before.
+
+```env
+AOP_API_KEY=change-me-to-a-long-random-value
+AOP_ALLOWED_ORIGINS=https://my-app.example.com
+```
 
 ## Usage
 

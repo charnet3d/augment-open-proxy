@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { HOST, PORT } from "./config";
+import { ALLOWED_ORIGINS, API_KEY, HOST, PORT } from "./config";
 import chatRouter from "./routes/chat";
 import messagesRouter from "./routes/messages";
 import modelsRouter from "./routes/models";
@@ -10,14 +9,14 @@ import responsesRouter from "./routes/responses";
 import { validateCredentials } from "./services/augmentClient";
 import { installHttpAgent } from "./services/httpAgent";
 import { loggingMiddleware } from "./services/logger";
+import { apiKeyMiddleware, corsMiddleware } from "./services/security";
 
 const app = new Hono();
 
 // Global middleware
-app.use("*", cors({
-  origin: process.env.CORS_ORIGIN || "*",
-}));
+app.use("*", corsMiddleware());
 app.use("*", loggingMiddleware());
+app.use("*", apiKeyMiddleware());
 
 // Health check
 app.get("/", (c) => {
@@ -63,6 +62,13 @@ async function main() {
     console.warn(
       "[WARN] No Augment credentials found. Run 'auggie login' or set AUGMENT_API_TOKEN/AUGMENT_API_URL."
     );
+  }
+
+  if (API_KEY) {
+    console.log("[security] API key authentication is enabled.");
+  }
+  if (ALLOWED_ORIGINS.length > 0) {
+    console.log(`[security] CORS restricted to: ${ALLOWED_ORIGINS.join(", ")}`);
   }
 
   const httpServer = serve(

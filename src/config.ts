@@ -40,3 +40,16 @@ function parseLogFormat(raw: string | undefined): LogFormat {
 }
 
 export const LOG_FORMAT: LogFormat = parseLogFormat(process.env.AOP_LOG_FORMAT);
+
+// Optional API key required on every request (except the `/` health check)
+// to secure access to the proxy. Accepted via `Authorization: Bearer <key>`
+// or `X-API-Key: <key>`. Unset (default) leaves the proxy open, matching
+// prior behavior.
+export const API_KEY: string | undefined = (process.env.AOP_API_KEY ?? "").trim() || undefined;
+
+// Comma-separated whitelist of origins allowed to make cross-origin browser
+// requests. Empty (default) allows any origin, matching prior behavior.
+export const ALLOWED_ORIGINS: string[] = (process.env.AOP_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0);
